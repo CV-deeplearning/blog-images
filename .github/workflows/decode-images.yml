@@ -1,0 +1,45 @@
+name: Decode staged images
+
+on:
+  push:
+    paths:
+      - "staging/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decode staging/*.b64 into repo paths
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          files=(staging/**/*.b64)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No staging/*.b64 files; nothing to do."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            rel="${f#staging/}"
+            out="${rel%.b64}"
+            mkdir -p "$(dirname "$out")"
+            base64 -d "$f" > "$out"
+            echo "decoded $f -> $out ($(stat -c%s "$out") bytes)"
+            OUT="$out" python3 -c 'from pathlib import Path; import os; p=Path(os.environ["OUT"]); data=p.read_bytes(); assert data[:8]==b"\x89PNG\r\n\x1a\n", f"{p} is not a valid PNG"'
+            rm -f "$f"
+          done
+          find staging -type d -empty -delete || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "feat: decode staged images into csdn/"
+          git push
