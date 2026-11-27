@@ -1,9 +1,6 @@
 name: Decode staged images
 
 on:
-  push:
-    paths:
-      - "staging/**"
   workflow_dispatch:
 
 permissions:
